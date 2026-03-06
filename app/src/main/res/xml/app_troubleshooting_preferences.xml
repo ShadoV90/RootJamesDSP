@@ -90,6 +90,13 @@
             app:summaryOff="@string/session_exclude_restricted_off"
             app:summaryOn="@string/session_exclude_restricted_on"
             app:iconSpaceReserved="false" />
+
+        <me.timschneeberger.rootlessjamesdsp.preference.MaterialSwitchPreference
+            app:key="@string/key_routing_mode_whitelist"
+            app:title="@string/routing_mode_whitelist_title"
+            app:summary="@string/routing_mode_whitelist_summary"
+            app:defaultValue="@bool/default_routing_mode_whitelist"
+            app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
 </PreferenceScreen>

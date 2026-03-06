@@ -6,7 +6,9 @@
     <string name="action_presets">Presets</string>
     <string name="action_revert">Reset to defaults</string>
     <string name="action_blocked_apps">Excluded apps</string>
-
+    <string name="key_routing_mode_whitelist">routing_mode_whitelist</string>
+    <string name="routing_mode_whitelist_title">Whitelist mode</string>
+    <string name="routing_mode_whitelist_summary">Only process audio for selected applications</string>
     <!-- Notification channels -->
     <string name="notification_group_service">Service</string>
     <string name="notification_channel_service">Service notification</string>

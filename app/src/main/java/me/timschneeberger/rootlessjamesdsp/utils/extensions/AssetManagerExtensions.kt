@@ -9,7 +9,7 @@ import java.io.FileOutputStream
 object AssetManagerExtensions {
     fun AssetManager.installPrivateAssets(context: Context, force: Boolean) {
         Timber.d("Installing private assets; force=$force")
-        context.getExternalFilesDir(null)?.absolutePath?.let {
+        java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP")?.absolutePath?.let {
             try {
                 this.copyAssetDir("Convolver", it, force)
                 this.copyAssetDir("DDC", it, force)

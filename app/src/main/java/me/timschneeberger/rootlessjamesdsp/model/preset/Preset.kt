@@ -24,7 +24,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 class Preset(val name: String, externalPath: File? = null): KoinComponent {
     private val ctx: Context by inject()
-    private val externalPath = externalPath ?: File("${ctx.getExternalFilesDir(null)!!.path}/Presets")
+    private val externalPath = externalPath ?: File("${java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP")!!.path}/Presets")
 
     fun file(): File = File(externalPath, name)
 
@@ -168,7 +168,7 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
                 findLiveprogScriptPath(ctx)?.let {
                     val originalFile = File(it)
                     val targetFile =
-                        File("${ctx.getExternalFilesDir(null)!!.path}/Liveprog", originalFile.name)
+                        File("${java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP")!!.path}/Liveprog", originalFile.name)
                     val tempPath = File(currentPath(ctx), FILE_LIVEPROG)
 
                     if(metadata[META_LIVEPROG_INCLUDED].toBoolean()) {
@@ -215,7 +215,7 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
                     if(node.attributes.getNamedItem("name").nodeValue ==
                         ctx.getString(R.string.key_liveprog_file)) {
                         return node.textContent.let {
-                            ctx.getExternalFilesDir(null)!!.absolutePath + "/" + it
+                            java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP")!!.absolutePath + "/" + it
                         }.also {
                             Timber.d("Found liveprog file path: $it")
                         }

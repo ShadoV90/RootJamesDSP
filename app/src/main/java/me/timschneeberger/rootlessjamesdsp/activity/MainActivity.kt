@@ -14,11 +14,14 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.IBinder
 import android.os.PersistableBundle
+import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import android.widget.CheckBox
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
@@ -83,6 +86,8 @@ import timber.log.Timber
 import java.io.File
 import java.util.Timer
 import kotlin.concurrent.schedule
+import androidx.core.net.toUri
+import androidx.core.content.edit
 
 
 class MainActivity : BaseActivity() {
@@ -143,6 +148,24 @@ class MainActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Check for Android 11 (API 30) or higher to request all files access
+        if (Build.VERSION.SDK_INT >= 30) {
+            if (!Environment.isExternalStorageManager()) {
+                Toast.makeText(this, "I need file access", Toast.LENGTH_LONG).show()
+
+                try {
+                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    intent.addCategory("android.intent.category.DEFAULT")
+                    intent.data = "package:$packageName".toUri()
+                    startActivity(intent)
+                } catch (_: Exception) {
+                    // Fallback if the device doesn't support the app-specific intent
+                    val intent = Intent()
+                    intent.action = Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
+                    startActivity(intent)
+                }
+            }
+        }
         savedInstanceState?.let {
             hasLoadFailed = it.getBoolean(STATE_LOAD_FAILED)
         }
@@ -339,7 +362,8 @@ class MainActivity : BaseActivity() {
                         getString(R.string.version_mismatch_root_description)
                     ) {
                         if(it) {
-                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://zackptg5.com/android.php")))
+                            startActivity(Intent(Intent.ACTION_VIEW,
+                                "https://zackptg5.com/android.php".toUri()))
                         }
                     }
                 }
@@ -489,9 +513,9 @@ class MainActivity : BaseActivity() {
                     addView(checkBox)
                 }
             )
-            .setPositiveButton(R.string.tutorial) { dialog, _ ->
+            .setPositiveButton(R.string.tutorial) { _, _ ->
                 prefsVar.set(R.string.key_android15_screenrecord_restriction_seen, checkBox.isChecked)
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://youtu.be/rVM13aY2rwU?t=31")))
+                startActivity(Intent(Intent.ACTION_VIEW, "https://youtu.be/rVM13aY2rwU?t=31".toUri()))
             }
             .setNegativeButton(R.string.close) { dialog, _ ->
                 prefsVar.set(R.string.key_android15_screenrecord_restriction_seen, checkBox.isChecked)
@@ -508,7 +532,7 @@ class MainActivity : BaseActivity() {
         }
 
         CoroutineScope(Dispatchers.Default).launch {
-            updateManager.isUpdateAvailable().collect {
+            updateManager.isUpdateAvailable().collect { it ->
                 when(it) {
                     is Result.Error -> {
                         Timber.e("Update check failed")
@@ -721,12 +745,12 @@ class MainActivity : BaseActivity() {
 
         showSingleChoiceAlert(titleRes, choices, -1) { idx ->
             idx ?: return@showSingleChoiceAlert
-            if (idx < 0 || idx > 1)
+            if (idx !in 0..1)
                 return@showSingleChoiceAlert
 
             val file = StorageUtils.importFile(
                 this,
-                File(getExternalFilesDir(null), subDir).absolutePath,
+                File(File(Environment.getExternalStorageDirectory(), "JamesDSP"), subDir).absolutePath,
                 uri
             )
 
@@ -755,10 +779,10 @@ class MainActivity : BaseActivity() {
                         else if (namespace != null && key != null && keyEnable != null)
                             @Suppress("DEPRECATION")
                             getSharedPreferences(namespace, MODE_MULTI_PROCESS)
-                                .edit()
-                                .putBoolean(getString(keyEnable), true)
-                                .putString(getString(key), file.absolutePath)
-                                .apply()
+                                .edit {
+                                    putBoolean(getString(keyEnable), true)
+                                        .putString(getString(key), file.absolutePath)
+                                }
 
                         delay(250L)
                         broadcastPresetLoadEvent()

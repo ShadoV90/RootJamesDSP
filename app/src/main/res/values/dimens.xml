@@ -1,3 +1,4 @@
 <resources>
     <dimen name="corner_radius">12dp</dimen>
+	<bool name="default_routing_mode_whitelist">false</bool>
 </resources>

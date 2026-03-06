@@ -57,18 +57,16 @@ class RootAudioProcessorService : BaseAudioProcessorService(), KoinComponent,
     private val blockedAppDatabase by lazy { AppBlocklistDatabase.getDatabase(this, applicationScope) }
     private val blockedAppRepository by lazy { AppBlocklistRepository(blockedAppDatabase.appBlocklistDao()) }
     private val blockedApps by lazy { blockedAppRepository.blocklist.asLiveData() }
-    private val blockedAppObserver = Observer<List<BlockedApp>?> { apps ->
-        if(!app.isEnhancedProcessing)
-            return@Observer
-
-        apps?.map { it.uid }?.let { uids ->
-            Timber.d("blockedAppObserver: Excluded UIDs: ${uids.joinToString("; ")}")
-
-            app.rootSessionDatabase.setExcludedUids(uids.toTypedArray())
-            sessionDumpManager?.pollOnce(false)
+    private val blockedAppObserver = Observer<List<BlockedApp>?> {
+        // Re-calculate routing whenever the list of apps changes
+        updateRoutingRules()
+    }
+    private val toggleListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == getString(R.string.key_routing_mode_whitelist)) {
+            Timber.d("Toggle listener fired! Updating routing rules.")
+            updateRoutingRules()
         }
     }
-
 
     // App object
     private val app
@@ -80,6 +78,10 @@ class RootAudioProcessorService : BaseAudioProcessorService(), KoinComponent,
         // Register shared preferences listener
         preferences.registerOnSharedPreferenceChangeListener(this)
         app.rootSessionDatabase.registerOnSessionChangeListener(this)
+
+        // Register the direct listener
+        val sharedPrefs = getSharedPreferences(packageName + "_preferences", MODE_PRIVATE)
+        sharedPrefs.registerOnSharedPreferenceChangeListener(toggleListener)
 
         // Get reference to system services
         audioManager = getSystemService<AudioManager>()!!
@@ -182,6 +184,10 @@ class RootAudioProcessorService : BaseAudioProcessorService(), KoinComponent,
         preferences.unregisterOnSharedPreferenceChangeListener(this)
         app.rootSessionDatabase.unregisterOnSessionChangeListener(this)
 
+        // Unregister the direct listener
+        val sharedPrefs = getSharedPreferences(packageName + "_preferences", MODE_PRIVATE)
+        sharedPrefs.unregisterOnSharedPreferenceChangeListener(toggleListener)
+
         notificationManager.cancel(Notifications.ID_SERVICE_STATUS)
     }
 
@@ -204,6 +210,10 @@ class RootAudioProcessorService : BaseAudioProcessorService(), KoinComponent,
                     app.rootSessionDatabase.clearSessions()
                 }
             }
+            getString(R.string.key_routing_mode_whitelist) -> {
+                Timber.d("Routing mode changed. Updating rules.")
+                updateRoutingRules()
+            }
         }
     }
 
@@ -213,6 +223,42 @@ class RootAudioProcessorService : BaseAudioProcessorService(), KoinComponent,
         sessionDumpManager = RootSessionDumpManager(this)
         sessionDumpManager?.setOnSessionDump(app.rootSessionDatabase::update)
         sessionDumpManager?.setOnDumpMethodChanged(app.rootSessionDatabase::clearSessions)
+        sessionDumpManager?.pollOnce(false)
+    }
+
+    private fun updateRoutingRules() {
+        if(!app.isEnhancedProcessing)
+            return
+
+        // Safely get the current list of selected UIDs
+        val selectedUids = blockedApps.value?.map { it.uid } ?: emptyList()
+
+        val prefKey = getString(R.string.key_routing_mode_whitelist)
+        val sharedPrefs = getSharedPreferences(packageName + "_preferences", MODE_PRIVATE)
+
+        // Safely read the value, whether it was saved as a Boolean (Switch) or a String (List)
+        val rawValue = sharedPrefs.all[prefKey]
+        val isWhitelistMode = when (rawValue) {
+            is Boolean -> rawValue
+            is String -> rawValue.toBooleanStrictOrNull() ?: false
+            else -> false
+        }
+
+        val uidsToExclude = if (isWhitelistMode) {
+            // Whitelist mode: exclude all apps EXCEPT the selected ones and the DSP itself
+            val allApps = packageManager.getInstalledApplications(0)
+            allApps
+                .map { it.uid }
+                .filter { it !in selectedUids && it != android.os.Process.myUid() }
+                .distinct()
+        } else {
+            // Blacklist mode: exclude ONLY the explicitly selected apps
+            selectedUids
+        }
+
+        Timber.d("updateRoutingRules: Whitelist Mode: $isWhitelistMode. Excluded UIDs count: ${uidsToExclude.size}")
+
+        app.rootSessionDatabase.setExcludedUids(uidsToExclude.toTypedArray())
         sessionDumpManager?.pollOnce(false)
     }
 

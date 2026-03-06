@@ -1,5 +1,7 @@
 package me.timschneeberger.rootlessjamesdsp.fragment
 
+import android.content.Context
+import android.content.Intent
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -12,6 +14,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import me.timschneeberger.rootlessjamesdsp.utils.Constants
+import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
 import me.timschneeberger.rootlessjamesdsp.MainApplication
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.adapter.AppBlocklistAdapter
@@ -58,6 +62,27 @@ class BlocklistFragment : Fragment() {
         savedInstanceState: Bundle?,
     ): View {
         binding = FragmentBlocklistBinding.inflate(layoutInflater, container, false)
+
+        // Bypass custom wrapper and use standard Android SharedPreferences
+        val sharedPrefs = requireContext().getSharedPreferences(requireContext().packageName + "_preferences", Context.MODE_PRIVATE)
+        val isWhitelistMode = sharedPrefs.getBoolean("routing_mode_whitelist", false)
+
+        // Set initial state and text for the switch
+        binding.whitelistModeSwitch.isChecked = isWhitelistMode
+        binding.whitelistModeSwitch.text = if (isWhitelistMode) "Included apps" else "Excluded apps"
+
+        // Listen for user toggling the switch
+        binding.whitelistModeSwitch.setOnCheckedChangeListener { _, isChecked ->
+            // Force write the new state directly to disk
+            sharedPrefs.edit().putBoolean("routing_mode_whitelist", isChecked).apply()
+
+            // Dynamically update the switch label to reflect the current mode
+            binding.whitelistModeSwitch.text = if (isChecked) "Included apps" else "Excluded apps"
+
+            // Force the audio service to clear its cache, reload preferences and reboot the recording core
+            requireContext().sendLocalBroadcast(Intent(Constants.ACTION_PREFERENCES_UPDATED))
+            requireContext().sendLocalBroadcast(Intent(Constants.ACTION_SERVICE_SOFT_REBOOT_CORE))
+        }
 
         sessionRecordingPolicyManager = SessionRecordingPolicyManager(requireContext())
 

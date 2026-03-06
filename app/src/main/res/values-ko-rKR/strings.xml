@@ -557,7 +557,7 @@
     <string name="self_update_install_fail">설치 실패. %1$s</string>
     <string name="self_update_finished">업데이트 설치됨. 앱을 다시 시작하는 중입니다…</string>
     <string name="self_update_no_updates">현재 사용 가능한 새 업데이트 없음</string>
-    <string name="self_update_notice">새 업데이트 사용 가능 (%1&amp;s)</string>
+    <string name="self_update_notice">새 업데이트 사용 가능 (%1$s)</string>
     <string name="self_update_notice_summary">새 업데이트를 다운로드하고 설치하려면 여기를 탭 하세요.</string>
     <string name="self_update_notice_dismiss_install">지금 설치</string>
     <string name="self_update_notice_dismiss_snooze">나중에 다시 알림</string>

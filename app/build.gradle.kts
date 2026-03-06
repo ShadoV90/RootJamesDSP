@@ -43,7 +43,12 @@ android {
             abiFilters += SUPPORTED_ABIS
         }
     }
-
+    signingConfigs {
+        create("release") {
+            enableV1Signing = true
+            enableV2Signing = true
+        }
+    }
     buildTypes {
         getByName("debug") {
             applicationIdSuffix = ".debug"
@@ -60,7 +65,7 @@ android {
             //proguardFiles("proguard-android-optimize.txt", "proguard-rules.pro")
             isMinifyEnabled = false
             isShrinkResources = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
         create("preview") {
             initWith(getByName("release"))
@@ -149,7 +154,7 @@ android {
     buildFeatures {
         viewBinding = true
         // Disable unused features
-        aidl = false
+        aidl = true
         renderScript = false
         shaders = false
     }

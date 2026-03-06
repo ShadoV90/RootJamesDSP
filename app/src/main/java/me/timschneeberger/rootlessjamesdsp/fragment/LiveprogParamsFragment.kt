@@ -175,7 +175,7 @@ class LiveprogParamsFragment : PreferenceFragmentCompat(), NonPersistentDatastor
 
     private fun reload() {
         val newPath = context?.let { ctx ->
-            ctx.getExternalFilesDir(null)!!.absolutePath + "/" + PreferenceCache.uncachedGet(
+            java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP")!!.absolutePath + "/" + PreferenceCache.uncachedGet(
                 ctx,
                 Constants.PREF_LIVEPROG,
                 R.string.key_liveprog_file,

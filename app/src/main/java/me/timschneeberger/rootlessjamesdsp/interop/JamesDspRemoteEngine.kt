@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.audiofx.AudioEffect
 import android.media.audiofx.AudioEffectHidden
-import me.timschneeberger.rootlessjamesdsp.MainApplication
 import me.timschneeberger.rootlessjamesdsp.interop.structure.EelVmVariable
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.AudioEffectExtensions.getParameterInt
@@ -15,7 +14,6 @@ import me.timschneeberger.rootlessjamesdsp.utils.extensions.AudioEffectExtension
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.AudioEffectExtensions.setParameterFloatArray
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.AudioEffectExtensions.setParameterImpulseResponseBuffer
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.registerLocalReceiver
-import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.showAlert
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.toast
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.unregisterLocalReceiver
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.crc
@@ -302,24 +300,35 @@ class JamesDspRemoteEngine(
         private val EFFECT_JAMESDSP = UUID.fromString("f27317f4-c984-4de6-9a90-545759495bf2")
 
         fun isPluginInstalled(): PluginState {
-            return try {
-                AudioEffect
-                    .queryEffects()
-                    .orEmpty()
-                    .firstOrNull { it.uuid == EFFECT_JAMESDSP }
-                    ?.run {
-                        if(name.contains("v3")) PluginState.Unsupported else PluginState.Available
-                    } ?: PluginState.Unavailable
-            } catch (e: Exception) {
-                Timber.e("isPluginInstalled: exception raised")
-                Timber.e(e)
-                MainApplication.instance.showAlert(
-                    "Error while checking audio effect status",
-                    "Unexpected error while checking whether JamesDSP's audio effect library is installed. \n\n" +
-                            "Error: $e",
-                )
-                PluginState.Unavailable
+            // 1. Standard API check (Works for HIDL and older devices)
+            val effects = AudioEffect.queryEffects()
+            for (effect in effects) {
+                if (effect.uuid == EFFECT_JAMESDSP) {
+                    Timber.d("Plugin detected via standard queryEffects (HIDL)")
+                    return PluginState.Available
+                }
             }
+
+            // 2. Physical file existence check (Ultimate fallback for AIDL root modules)
+            // If the system API completely fails to list the effect, we check if Magisk mounted the .so files
+            val possiblePaths = arrayOf(
+                "/vendor/lib/soundfx/libjamesdsp.so",
+                "/vendor/lib64/soundfx/libjamesdsp.so",
+                "/odm/lib/soundfx/libjamesdsp.so",
+                "/odm/lib64/soundfx/libjamesdsp.so",
+                "/system/lib/soundfx/libjamesdsp.so",
+                "/system/lib64/soundfx/libjamesdsp.so"
+            )
+
+            for (path in possiblePaths) {
+                if (java.io.File(path).exists()) {
+                    Timber.d("Plugin detected via physical file check at $path (AIDL fallback)")
+                    return PluginState.Available
+                }
+            }
+
+            Timber.e("JamesDSP plugin not found on this device")
+            return PluginState.Unavailable
         }
     }
 }

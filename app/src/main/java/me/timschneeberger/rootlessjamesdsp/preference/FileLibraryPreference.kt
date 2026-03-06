@@ -32,7 +32,7 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
                     it.entry
             }
 
-            directory = File(context.getExternalFilesDir(null), type)
+            directory = File(java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP"), type)
             if(type.lowercase() != "unknown")
                 directory?.mkdir()
             refresh()
@@ -52,7 +52,7 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
         // Convert old full path convention to new relative paths
         val init = getPersistedString((defaultValue as? String) ?: "")
         value = if(init.startsWith("/"))
-            File(init).toRelativeString(context.getExternalFilesDir(null)!!)
+            File(init).toRelativeString(java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP")!!)
         else
             init
     }
@@ -83,7 +83,7 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
             if(hasCorrectExtension(it))
             {
                 val name = it.substringBeforeLast('.')
-                val path = File(directory!!, it).toRelativeString(context.getExternalFilesDir(null)!!)
+                val path = File(directory!!, it).toRelativeString(java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP")!!)
                 result[name] = path
             }
         }
@@ -150,7 +150,7 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
             return if(path.startsWith("/"))
                 path
             else {
-                val externalDir = context.getExternalFilesDir(null)
+                val externalDir = java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP")
                 externalDir ?: Timber.e("getExternalFilesDir returned null")
                 externalDir?.let { it.absolutePath + "/" + path } ?: ""
             }

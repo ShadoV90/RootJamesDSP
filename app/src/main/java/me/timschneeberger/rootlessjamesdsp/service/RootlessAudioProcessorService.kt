@@ -57,6 +57,7 @@ import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.un
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.PermissionExtensions.hasRecordPermission
 import me.timschneeberger.rootlessjamesdsp.utils.notifications.Notifications
 import me.timschneeberger.rootlessjamesdsp.utils.notifications.ServiceNotificationHelper
+import me.timschneeberger.rootlessjamesdsp.utils.notifications.ServiceNotificationHelper.pushServiceNotification
 import me.timschneeberger.rootlessjamesdsp.utils.preferences.Preferences
 import me.timschneeberger.rootlessjamesdsp.utils.sdkAbove
 import org.koin.android.ext.android.inject
@@ -324,10 +325,10 @@ class RootlessAudioProcessorService : BaseAudioProcessorService() {
     // Session change listener
     private val onSessionChangeListener = object : OnRootlessSessionChangeListener {
         override fun onSessionChanged(sessionList: HashMap<Int, IEffectSession>) {
-            isProcessorIdle = sessionList.size == 0
+            isProcessorIdle = sessionList.isEmpty()
             Timber.d("onSessionChanged: isProcessorIdle=$isProcessorIdle")
 
-            ServiceNotificationHelper.pushServiceNotification(
+            pushServiceNotification(
                 this@RootlessAudioProcessorService,
                 sessionList.map { it.value }.toTypedArray()
             )
@@ -395,6 +396,14 @@ class RootlessAudioProcessorService : BaseAudioProcessorService() {
 
                 requestAudioRecordRecreation()
             }
+            // --- NEW CODE: Listen for whitelist mode changes ---
+            getString(R.string.key_routing_mode_whitelist) -> {
+                val isWhitelistMode = preferences.get<Boolean>(R.string.key_routing_mode_whitelist)
+                Timber.d("Routing mode changed. Whitelist: $isWhitelistMode")
+
+                // Restart the audio recorder to apply the new routing rules
+                requestAudioRecordRecreation()
+            }
         }
     }
 
@@ -459,7 +468,7 @@ class RootlessAudioProcessorService : BaseAudioProcessorService() {
         // TODO Move all audio-related code to C++
         recorderThread = Thread {
             try {
-                ServiceNotificationHelper.pushServiceNotification(applicationContext, arrayOf())
+                pushServiceNotification(applicationContext, arrayOf())
 
                 val floatBuffer = FloatArray(bufferSize)
                 val floatOutBuffer = FloatArray(bufferSize)
@@ -500,7 +509,7 @@ class RootlessAudioProcessorService : BaseAudioProcessorService() {
                         try {
                             Thread.sleep(50)
                         }
-                        catch(e: InterruptedException) {
+                        catch(_: InterruptedException) {
                             break
                         }
                         continue
@@ -629,23 +638,46 @@ class RootlessAudioProcessorService : BaseAudioProcessorService() {
             .addMatchingUsage(AudioAttributes.USAGE_GAME)
             .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
 
-        val excluded = (if(excludeRestrictedSessions)
+        val restrictedAndSelf = (if(excludeRestrictedSessions)
             sessionManager.sessionPolicyDatabase.getRestrictedUids().toList()
         else {
             sessionManager.pollOnce(false)
             emptyList()
         }).toMutableList()
 
-        blockedApps.value?.map { it.uid }?.let {
-            excluded += it
+        // Always exclude JamesDSP itself to prevent infinite audio loops
+        restrictedAndSelf += Process.myUid()
+
+        val userSelectedUids = blockedApps.value?.map { it.uid } ?: emptyList()
+
+        val isWhitelistMode = preferences.get<Boolean>(R.string.key_routing_mode_whitelist)
+
+        if (isWhitelistMode) {
+            // --- WHITELIST MODE ---
+            // NOTE: Android API throws IllegalArgumentException if excludeUid and addMatchingUid are combined.
+            // Using addMatchingUid automatically excludes everything else (including JamesDSP itself).
+
+            // Filter out any restricted apps just in case they ended up in the user selection
+            val safeUidsToMatch = userSelectedUids.filter { it !in restrictedAndSelf }
+
+            if (safeUidsToMatch.isNotEmpty()) {
+                safeUidsToMatch.forEach { configBuilder.addMatchingUid(it) }
+            } else {
+                // Add a dummy UID to prevent capturing everything when the list is empty
+                configBuilder.addMatchingUid(999999)
+            }
+            Timber.d("buildAudioRecord: Mode=Whitelist, Allowed UIDs: ${safeUidsToMatch.joinToString("; ")}")
+        } else {
+            // --- BLACKLIST MODE (Original Behavior) ---
+            // Combine restricted apps and user-selected apps to exclude them all
+            val allExcluded = restrictedAndSelf + userSelectedUids
+            allExcluded.forEach { configBuilder.excludeUid(it) }
+
+            Timber.d("buildAudioRecord: Mode=Blacklist, Excluded UIDs: ${allExcluded.joinToString("; ")}")
         }
-        excluded += Process.myUid()
 
-        excluded.forEach { configBuilder.excludeUid(it) }
-        sessionManager.sessionDatabase.setExcludedUids(excluded.toTypedArray())
+        sessionManager.sessionDatabase.setExcludedUids(restrictedAndSelf.toTypedArray())
         sessionManager.pollOnce(false)
-
-        Timber.d("buildAudioRecord: Excluded UIDs: ${excluded.joinToString("; ")}")
 
         return AudioRecord.Builder()
             .setAudioFormat(format)

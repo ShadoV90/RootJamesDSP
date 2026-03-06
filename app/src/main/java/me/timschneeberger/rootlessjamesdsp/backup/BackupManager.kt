@@ -24,7 +24,6 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
 class BackupManager(private val context: Context): KoinComponent {
     private val preferences: Preferences.App by inject()
     var job: Job? = null
@@ -89,7 +88,7 @@ class BackupManager(private val context: Context): KoinComponent {
                 }
 
                 FileLibraryPreference.types.entries.forEach { entry ->
-                    File(context.getExternalFilesDir(null), "/${entry.key}")
+                    File(java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP"), "/${entry.key}")
                         .listFiles()
                         ?.filter { entry.value.any { ext -> it.absolutePath.endsWith(ext) } }
                         ?.forEach { c.add(it, "${entry.key}/${it.name}") }
@@ -131,7 +130,7 @@ class BackupManager(private val context: Context): KoinComponent {
                     file.name.startsWith("dsp_") && file.extension == "xml"
                 }?.forEach { it.delete() }
                 // Remove external files
-                context.getExternalFilesDir(null)
+                java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP")
                     ?.absoluteFile
                     ?.listFiles()
                     ?.forEach { it.deleteRecursively() }
@@ -149,7 +148,7 @@ class BackupManager(private val context: Context): KoinComponent {
                     )
                 }
                 else if(file.isDirectory && FileLibraryPreference.types.any { file.name.startsWith(it.key) }) {
-                    file.copyRecursively(File(context.getExternalFilesDir(null)!!.absolutePath + "/" + file.name), true)
+                    file.copyRecursively(File(java.io.File(android.os.Environment.getExternalStorageDirectory(), "JamesDSP")!!.absolutePath + "/" + file.name), true)
                 }
             }
 
